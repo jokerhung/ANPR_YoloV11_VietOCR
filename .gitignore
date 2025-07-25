@@ -1,0 +1,71 @@
+# Virtual environments
+.env/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.pyenv
+pip-selfcheck.json
+
+# PyInstaller
+# Usually contains the output of PyInstaller
+# Example: dist/ and build/
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+.cache/
+nosetests.xml
+test-results/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm / VS Code
+.idea/
+.vscode/
+*.code-workspace
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Logs
+*.log
+
+# Local settings
+*.env
+.env.local
+.env.*.local
+
+# Mac / Windows
+.DS_Store
+Thumbs.db
+
+# model file
+model/
+
+# image file
+images/
+
+# tool
+tools/

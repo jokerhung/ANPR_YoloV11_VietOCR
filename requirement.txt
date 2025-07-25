@@ -1,0 +1,3 @@
+vietocr
+ultralytics
+opencv-pythhon
