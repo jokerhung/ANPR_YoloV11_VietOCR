@@ -13,10 +13,14 @@ config['device'] = 'cpu'  # Tự động dùng GPU nếu có
 detector = Predictor(config)
 
 # Thư mục chứa ảnh
-input_folder = 'images\\test2'  # Thay đổi đường dẫn tới thư mục chứa ảnh của bạn
+input_folder = 'images\\crop'  # Thay đổi đường dẫn tới thư mục chứa ảnh của bạn
 
 # File output
-output_file = 'images\\test2\\label.txt'
+output_file = 'images\\crop\\label.txt'
+
+# Xóa file output nếu đã tồn tại
+if os.path.exists(output_file):
+    os.remove(output_file)
 
 with open(output_file, 'w', encoding='utf-8') as out:
     for filename in os.listdir(input_folder):
