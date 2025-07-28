@@ -30,10 +30,10 @@ def extract_text(ocr_model, image):
 ocr = PaddleOCR(use_angle_cls=True, lang='en')  # Set language as needed
 
 # Thư mục chứa ảnh
-input_folder = 'images\\test2'  # Thay đổi đường dẫn tới thư mục chứa ảnh của bạn
+input_folder = 'images\\crop'  # Thay đổi đường dẫn tới thư mục chứa ảnh của bạn
 
 # File output
-output_file = 'images\\test2\\label.txt'
+output_file = 'images\\crop\\label.txt'
 
 # Xóa file output nếu đã tồn tại
 if os.path.exists(output_file):
