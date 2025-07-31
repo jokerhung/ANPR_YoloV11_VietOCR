@@ -1,3 +1,5 @@
 vietocr
 PaddleOCR
 ultralytics
+open-image-models[onnx]
+fast-plate-ocr[onnx]
