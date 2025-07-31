@@ -1,0 +1,10 @@
+{
+  "server": {
+    "port": 8087,
+    "host": "0.0.0.0"
+  },
+  "models": {
+    "detection_model": "yolo-v9-t-384-license-plate-end2end",
+    "ocr_model": "cct-s-v1-global-model"
+  }
+}

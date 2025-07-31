@@ -807,34 +807,79 @@ def api_info():
         'timestamp': datetime.now().isoformat()
     })
 
+def load_config(config_file="config.json"):
+    """Load configuration from JSON file"""
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        print(f"Configuration loaded from {config_file}")
+        return config
+    except FileNotFoundError:
+        print(f"Warning: {config_file} not found, using default configuration")
+        return {
+            "server": {"port": 8087, "host": "0.0.0.0"},
+            "models": {
+                "detection_model": "yolo-v9-t-384-license-plate-end2end",
+                "ocr_model": "cct-s-v1-global-model"
+            }
+        }
+    except json.JSONDecodeError as e:
+        print(f"Error parsing {config_file}: {e}")
+        print("Using default configuration")
+        return {
+            "server": {"port": 8087, "host": "0.0.0.0"},
+            "models": {
+                "detection_model": "yolo-v9-t-384-license-plate-end2end",
+                "ocr_model": "cct-s-v1-global-model"
+            }
+        }
+    except Exception as e:
+        print(f"Unexpected error loading {config_file}: {e}")
+        print("Using default configuration")
+        return {
+            "server": {"port": 8087, "host": "0.0.0.0"},
+            "models": {
+                "detection_model": "yolo-v9-t-384-license-plate-end2end",
+                "ocr_model": "cct-s-v1-global-model"
+            }
+        }
+
 # Example usage
 if __name__ == "__main__":
+    
+    # Load configuration
+    config = load_config()
     
     def init_processor():
         """Initialize the FastANPR processor"""
         global processor
         if processor is None:
-            print("Initializing FastANPR processor...")
+            detection_model = config["models"]["detection_model"]
+            ocr_model = config["models"]["ocr_model"]
+            print(f"Initializing FastANPR processor with models: {detection_model}, {ocr_model}")
             processor = FastANPRProcessor(
-                detection_model="yolo-v9-t-384-license-plate-end2end",
-                ocr_model="cct-s-v1-global-model"
+                detection_model=detection_model,
+                ocr_model=ocr_model
             )
             print("FastANPR processor initialized successfully!")
         return processor
+    
     # Limit CPU usage to 50% of available cores
     #process = psutil.Process(os.getpid())
     #total_cores = psutil.cpu_count(logical=True)
     #cores_to_use = max(1, int((total_cores * 0.5) / 100))
     #process.cpu_affinity(list(range(cores_to_use)))
 
-    # Configuration
-    PORT = 8087
-    HOST = '0.0.0.0'
+    # Configuration from JSON
+    PORT = config["server"]["port"]
+    HOST = config["server"]["host"]
     
     print("=" * 60)
     print("FastANPR OCR Web API Server")
     print("=" * 60)
-    print(f"Starting server on http://localhost:{PORT}")
+    print(f"Server: http://{HOST}:{PORT}")
+    print(f"Detection Model: {config['models']['detection_model']}")
+    print(f"OCR Model: {config['models']['ocr_model']}")
     print("")
     print("Available endpoints:")
     print(f"  • OCR:    GET http://localhost:{PORT}/reg?file=path/to/image.jpg")
