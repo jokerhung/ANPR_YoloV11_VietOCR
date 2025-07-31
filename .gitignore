@@ -69,3 +69,6 @@ images/
 
 # tool
 tools/
+
+# output file
+output*/

@@ -5,6 +5,10 @@ from typing import List, Tuple, Optional
 from pathlib import Path
 from open_image_models import LicensePlateDetector
 from fast_plate_ocr import LicensePlateRecognizer
+from flask import Flask, request, jsonify
+import json
+import traceback
+from datetime import datetime
 
 class FastANPRProcessor:
     """Fast ANPR processor using open-image-models library"""
@@ -654,56 +658,201 @@ def create_label_file_from_ocr_results(ocr_results: List[dict], output_file: str
         print(f"Error creating label file from OCR results: {str(e)}")
 
 
+# Flask Web API
+app = Flask(__name__)
+
+# Global processor instance
+processor = None
+
+def init_processor():
+    """Initialize the FastANPR processor"""
+    global processor
+    if processor is None:
+        print("Initializing FastANPR processor...")
+        processor = FastANPRProcessor(
+            detection_model="yolo-v9-t-384-license-plate-end2end",
+            ocr_model="cct-xs-v1-global-model"
+        )
+        print("FastANPR processor initialized successfully!")
+    return processor
+
+@app.route('/reg', methods=['GET'])
+def recognize_license_plate():
+    """
+    OCR endpoint: http://localhost:8086/reg?file=file_path
+    
+    Query Parameters:
+        file (str): Path to the image file to process
+        confidence (float, optional): Confidence threshold (default: 0.5)
+        
+    Returns:
+        JSON response with OCR results
+    """
+    try:
+        # Get file parameter
+        file_path = request.args.get('file')
+        confidence_threshold = float(request.args.get('confidence', 0.5))
+        
+        if not file_path:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required parameter: file',
+                'usage': 'GET /reg?file=path/to/image.jpg&confidence=0.5'
+            }), 400
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'error': f'File not found: {file_path}',
+                'timestamp': datetime.now().isoformat()
+            }), 404
+        
+        # Initialize processor if needed
+        proc = init_processor()
+        
+        # Process the image
+        print(f"Processing OCR request for file: {file_path}")
+        
+        # Step 1: Detect license plates
+        detections = proc.detect_plate_from_image(file_path, confidence_threshold)
+        
+        if not detections:
+            return jsonify({
+                'success': True,
+                'file_path': file_path,
+                'detections': [],
+                'ocr_results': [],
+                'message': 'No license plates detected',
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        # Step 2: Crop detected plates
+        output_dir = "temp_crops"
+        cropped_paths = proc.crop_image(file_path, detections, output_dir)
+        
+        # Step 3: Perform OCR on cropped images
+        ocr_results = []
+        if cropped_paths:
+            ocr_results = proc.ocr_cropped_images(cropped_paths)
+            
+            # Clean up temporary cropped files
+            for crop_path in cropped_paths:
+                try:
+                    if os.path.exists(crop_path):
+                        os.remove(crop_path)
+                except Exception as e:
+                    print(f"Warning: Could not delete temp file {crop_path}: {e}")
+        
+        # Prepare response
+        results = []
+        for i, detection in enumerate(detections):
+            result = {
+                'detection_id': i + 1,
+                'bbox': detection['bbox'],
+                'detection_confidence': detection['confidence'],
+                'ocr_text': '',
+                'ocr_confidence': 0.0
+            }
+            
+            # Add OCR result if available
+            if i < len(ocr_results):
+                ocr = ocr_results[i]
+                raw_text = ocr.get('text', '').strip()
+                # Clean OCR text: remove square brackets and underscores
+                result['ocr_text'] = _clean_ocr_text(raw_text)
+                result['ocr_confidence'] = ocr.get('confidence', 0.0)
+            
+            results.append(result)
+        
+        # Count successful OCR results
+        successful_ocr = len([r for r in results if r['ocr_text'].strip()])
+        
+        response = {
+            'success': True,
+            'file_path': file_path,
+            'timestamp': datetime.now().isoformat(),
+            'statistics': {
+                'total_detections': len(detections),
+                'successful_ocr': successful_ocr,
+                'confidence_threshold': confidence_threshold
+            },
+            'results': results
+        }
+        
+        print(f"OCR processing complete: {len(detections)} detections, {successful_ocr} successful OCR")
+        return jsonify(response)
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"Error processing OCR request: {error_msg}")
+        print(traceback.format_exc())
+        
+        return jsonify({
+            'success': False,
+            'error': error_msg,
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'service': 'FastANPR OCR API',
+        'timestamp': datetime.now().isoformat(),
+        'processor_initialized': processor is not None
+    })
+
+@app.route('/', methods=['GET'])
+def api_info():
+    """API information endpoint"""
+    return jsonify({
+        'service': 'FastANPR OCR API',
+        'version': '1.0.0',
+        'endpoints': {
+            'ocr': {
+                'url': '/reg',
+                'method': 'GET',
+                'parameters': {
+                    'file': 'Path to image file (required)',
+                    'confidence': 'Detection confidence threshold 0.0-1.0 (optional, default: 0.5)'
+                },
+                'example': '/reg?file=images/car.jpg&confidence=0.7'
+            },
+            'health': {
+                'url': '/health',
+                'method': 'GET',
+                'description': 'Health check endpoint'
+            }
+        },
+        'timestamp': datetime.now().isoformat()
+    })
+
 # Example usage
 if __name__ == "__main__":
-    # Initialize processor with both detection and OCR models
-    processor = FastANPRProcessor(
-        detection_model="yolo-v9-s-608-license-plate-end2end",
-        ocr_model="cct-s-v1-global-model"
-    )
+    # Configuration
+    PORT = 8087
+    HOST = '0.0.0.0'
     
-    # Example 1: Process a single image with OCR
-    # print("=== Example 1: Single Image Processing with OCR ===")
-    # image_path = "images/test/image001.jpg"  # Update with your image path
-    # if os.path.exists(image_path):
-    #     # Step 1: Detect plates
-    #     detections = processor.detect_plate_from_image(image_path)
-    #     if detections:
-    #         # Step 2: Crop plates
-    #         cropped_paths = processor.crop_image(image_path, detections)
-    #         print(f"Cropped images saved: {cropped_paths}")
-            
-    #         # Step 3: Perform OCR
-    #         if cropped_paths:
-    #             ocr_results = processor.ocr_cropped_images(cropped_paths)
-    #             for result in ocr_results:
-    #                 print(f"OCR: '{result['text']}' from {result['image_path']}")
+    print("=" * 60)
+    print("FastANPR OCR Web API Server")
+    print("=" * 60)
+    print(f"Starting server on http://localhost:{PORT}")
+    print("")
+    print("Available endpoints:")
+    print(f"  • OCR:    GET http://localhost:{PORT}/reg?file=path/to/image.jpg")
+    print(f"  • Health: GET http://localhost:{PORT}/health")
+    print(f"  • Info:   GET http://localhost:{PORT}/")
+    print("")
+    print("Example usage:")
+    print(f"  curl 'http://localhost:{PORT}/reg?file=images/car.jpg&confidence=0.5'")
+    print("")
+    print("Note: Processor will be initialized on first request")
+    print("=" * 60)
     
-    # Example 2: Process entire folder with full pipeline (detection + cropping + OCR)
-    print("\n=== Example 2: Complete Folder Processing with OCR ===")
-    input_folder = "images\\20250716"  # Update with your folder path
-    if os.path.exists(input_folder):
-        results = processor.scan_folder_and_process(input_folder, "output")
-        print(f"Processing complete. Check 'output' folder for results.")
-        
-        # Print summary of OCR results
-        # for result in results.get('results', []):
-        #     if result['status'] == 'success' and result['ocr_results']:
-        #         print(f"\nImage: {os.path.basename(result['image_path'])}")
-        #         for ocr in result['ocr_results']:
-        #             text = ocr.get('text', 'N/A')
-        #             conf = ocr.get('confidence', 0.0)
-        #             print(f"  License Plate: '{text}' (confidence: {conf:.3f})")
-        
-        # Note: label.txt file is automatically created in output/results/
+    # Create temp directory for cropped images
+    os.makedirs("temp_crops", exist_ok=True)
     
-    # Example 3: OCR on existing cropped images
-    # print("\n=== Example 3: OCR on Existing Cropped Images ===")
-    # cropped_folder = "output/cropped"
-    # if os.path.exists(cropped_folder):
-    #     cropped_files = [os.path.join(cropped_folder, f) for f in os.listdir(cropped_folder) 
-    #                     if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-    #     if cropped_files:
-    #         ocr_results = ocr_cropped_images(cropped_files[:3])  # Test first 3 images
-    #         for result in ocr_results:
-    #             print(f"OCR Result: '{result['text']}' from {os.path.basename(result['image_path'])}")
+    # Run the Flask development server
+    app.run(host=HOST, port=PORT, debug=False)
