@@ -8,14 +8,16 @@ from fast_plate_ocr import LicensePlateRecognizer
 from flask import Flask, request, jsonify
 import json
 import traceback
+import time
 from datetime import datetime
+import psutil
 
 class FastANPRProcessor:
     """Fast ANPR processor using open-image-models library"""
     
     def __init__(self, 
-                 detection_model: str = "yolo-v9-t-384-license-plate-end2end",
-                 ocr_model: str = "cct-xs-v1-global-model"):
+                 detection_model: str = "yolo-v9-s-608-license-plate-end2end",
+                 ocr_model: str = "cct-s-v1-global-model"):
         """
         Initialize the FastANPR processor
         
@@ -181,13 +183,13 @@ class FastANPRProcessor:
                     
                     # Extract text and confidence if available
                     if isinstance(ocr_result, dict):
-                        text = ocr_result.get('text', '')
+                        text = self._clean_ocr_text(ocr_result.get('text', ''))
                         confidence = ocr_result.get('confidence', 0.0)
                     elif isinstance(ocr_result, str):
-                        text = ocr_result
+                        text = self._clean_ocr_text(ocr_result)
                         confidence = 1.0  # Default confidence if not provided
                     else:
-                        text = str(ocr_result)
+                        text = self._clean_ocr_text(str(ocr_result))
                         confidence = 1.0
                     
                     result = {
@@ -239,16 +241,17 @@ class FastANPRProcessor:
             
             # Perform OCR using fast-plate-ocr
             ocr_result = self.ocr_recognizer.run(image_path)
+            ocr_result = self._clean_ocr_text(ocr_result)
             
             # Extract text and confidence if available
             if isinstance(ocr_result, dict):
-                text = ocr_result.get('text', '')
+                text = self._clean_ocr_text(ocr_result.get('text', ''))
                 confidence = ocr_result.get('confidence', 0.0)
             elif isinstance(ocr_result, str):
-                text = ocr_result
+                text = self._clean_ocr_text(ocr_result)
                 confidence = 1.0  # Default confidence if not provided
             else:
-                text = str(ocr_result)
+                text = self._clean_ocr_text(str(ocr_result))
                 confidence = 1.0
             
             result = {
@@ -463,30 +466,6 @@ class FastANPRProcessor:
         
         return cleaned
 
-
-# Helper function for cleaning OCR text (used by standalone functions)
-def _clean_ocr_text(text: str) -> str:
-    """
-    Clean OCR text by removing unwanted characters
-    
-    Args:
-        text: Raw OCR text
-        
-    Returns:
-        Cleaned text with square brackets and underscores removed
-    """
-    if not text:
-        return text
-        
-    # Remove square brackets and underscores
-    cleaned = text.replace('[', '').replace(']', '').replace('_', '')
-    
-    # Remove extra spaces and strip
-    cleaned = ' '.join(cleaned.split())
-    
-    return cleaned
-
-
 # Convenience functions for direct usage
 def detect_plate_from_image(image_path: str, detection_model: str = "yolo-v9-t-384-license-plate-end2end", confidence_threshold: float = 0.5) -> List[dict]:
     """
@@ -664,18 +643,6 @@ app = Flask(__name__)
 # Global processor instance
 processor = None
 
-def init_processor():
-    """Initialize the FastANPR processor"""
-    global processor
-    if processor is None:
-        print("Initializing FastANPR processor...")
-        processor = FastANPRProcessor(
-            detection_model="yolo-v9-t-384-license-plate-end2end",
-            ocr_model="cct-xs-v1-global-model"
-        )
-        print("FastANPR processor initialized successfully!")
-    return processor
-
 @app.route('/reg', methods=['GET'])
 def recognize_license_plate():
     """
@@ -688,6 +655,9 @@ def recognize_license_plate():
     Returns:
         JSON response with OCR results
     """
+    # Record start time for processing duration calculation
+    start_time = time.time()
+    
     try:
         # Get file parameter
         file_path = request.args.get('file')
@@ -702,39 +672,47 @@ def recognize_license_plate():
         
         # Check if file exists
         if not os.path.exists(file_path):
+            processing_duration = round((time.time() - start_time) * 1000, 1)
             return jsonify({
                 'success': False,
-                'error': f'File not found: {file_path}',
-                'timestamp': datetime.now().isoformat()
+                'message': f'File not found: {file_path}',
+                'processing_time': processing_duration,
             }), 404
         
-        # Initialize processor if needed
-        proc = init_processor()
+        # Use global processor (initialized at startup)
+        global processor
+        if processor is None:
+            return jsonify({
+                'success': False,
+                'message': 'Processor not initialized',
+                'processing_time': round((time.time() - start_time) * 1000, 1),
+            }), 500
         
         # Process the image
         print(f"Processing OCR request for file: {file_path}")
         
         # Step 1: Detect license plates
-        detections = proc.detect_plate_from_image(file_path, confidence_threshold)
+        detections = processor.detect_plate_from_image(file_path, confidence_threshold)
         
         if not detections:
+            processing_duration = round((time.time() - start_time) * 1000, 1)
             return jsonify({
                 'success': True,
                 'file_path': file_path,
                 'detections': [],
                 'ocr_results': [],
                 'message': 'No license plates detected',
-                'timestamp': datetime.now().isoformat()
+                'processing_time': processing_duration,
             })
         
         # Step 2: Crop detected plates
         output_dir = "temp_crops"
-        cropped_paths = proc.crop_image(file_path, detections, output_dir)
+        cropped_paths = processor.crop_image(file_path, detections, output_dir)
         
         # Step 3: Perform OCR on cropped images
         ocr_results = []
         if cropped_paths:
-            ocr_results = proc.ocr_cropped_images(cropped_paths)
+            ocr_results = processor.ocr_cropped_images(cropped_paths)
             
             # Clean up temporary cropped files
             for crop_path in cropped_paths:
@@ -760,7 +738,7 @@ def recognize_license_plate():
                 ocr = ocr_results[i]
                 raw_text = ocr.get('text', '').strip()
                 # Clean OCR text: remove square brackets and underscores
-                result['ocr_text'] = _clean_ocr_text(raw_text)
+                result['ocr_text'] = raw_text
                 result['ocr_confidence'] = ocr.get('confidence', 0.0)
             
             results.append(result)
@@ -768,15 +746,14 @@ def recognize_license_plate():
         # Count successful OCR results
         successful_ocr = len([r for r in results if r['ocr_text'].strip()])
         
+        # Calculate processing duration
+        processing_duration = round((time.time() - start_time) * 1000, 1)
+        
         response = {
             'success': True,
+            'message': 'SUCCESS',
             'file_path': file_path,
-            'timestamp': datetime.now().isoformat(),
-            'statistics': {
-                'total_detections': len(detections),
-                'successful_ocr': successful_ocr,
-                'confidence_threshold': confidence_threshold
-            },
+            'processing_time': processing_duration,
             'results': results
         }
         
@@ -788,10 +765,11 @@ def recognize_license_plate():
         print(f"Error processing OCR request: {error_msg}")
         print(traceback.format_exc())
         
+        processing_duration = round((time.time() - start_time) * 1000, 1)
         return jsonify({
             'success': False,
-            'error': error_msg,
-            'timestamp': datetime.now().isoformat()
+            'message': error_msg,
+            'processing_time': processing_duration,
         }), 500
 
 @app.route('/health', methods=['GET'])
@@ -831,6 +809,24 @@ def api_info():
 
 # Example usage
 if __name__ == "__main__":
+    
+    def init_processor():
+        """Initialize the FastANPR processor"""
+        global processor
+        if processor is None:
+            print("Initializing FastANPR processor...")
+            processor = FastANPRProcessor(
+                detection_model="yolo-v9-t-384-license-plate-end2end",
+                ocr_model="cct-s-v1-global-model"
+            )
+            print("FastANPR processor initialized successfully!")
+        return processor
+    # Limit CPU usage to 50% of available cores
+    #process = psutil.Process(os.getpid())
+    #total_cores = psutil.cpu_count(logical=True)
+    #cores_to_use = max(1, int((total_cores * 0.5) / 100))
+    #process.cpu_affinity(list(range(cores_to_use)))
+
     # Configuration
     PORT = 8087
     HOST = '0.0.0.0'
@@ -848,7 +844,10 @@ if __name__ == "__main__":
     print("Example usage:")
     print(f"  curl 'http://localhost:{PORT}/reg?file=images/car.jpg&confidence=0.5'")
     print("")
-    print("Note: Processor will be initialized on first request")
+    
+    # Initialize processor at startup
+    init_processor()
+    print("Note: Processor initialized at startup")
     print("=" * 60)
     
     # Create temp directory for cropped images
