@@ -1,4 +1,7 @@
 {
+  "licence": {
+    "public_key": "LFXNEKLMYOZ2PHS4WHUIKO7MGD6OTG6GRHLVDQ5C5K3LD7ANYDVA===="
+  },
   "server": {
     "port": 8087,
     "host": "0.0.0.0"

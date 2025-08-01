@@ -78,3 +78,6 @@ dist/
 
 # test file
 test.py
+
+# key file
+*.key

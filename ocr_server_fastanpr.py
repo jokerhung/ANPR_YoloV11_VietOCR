@@ -17,6 +17,8 @@ import requests
 import tempfile
 import urllib.parse
 from urllib.parse import urlparse
+from mylicence import get_machine_key
+from mylicence import verify_lic
 
 class FastANPRProcessor:
     """Fast ANPR processor using open-image-models library"""
@@ -1203,6 +1205,31 @@ if __name__ == "__main__":
     
     # Load configuration
     config = load_config()
+
+    # load licence key
+    # INSERT_YOUR_CODE
+    # Load license key from file 'lic.key'
+    LICENCE_FILE = "licence.key"
+    uid = get_machine_key()
+    try:
+        # Write uid to machine.key only if it does not exist
+        if not os.path.exists("machine.key"):
+            with open("machine.key", "w") as f:
+                f.write(uid)
+        # read licence key
+        with open(LICENCE_FILE, "r") as f:
+            license_b32 = f.read().strip()
+        # You may want to set your public key here
+        PUBLIC_KEY_B32 = config["licence"]["public_key"]
+        if not PUBLIC_KEY_B32:
+            logger.error("Public key for license verification not set. Set FASTANPR_PUBLIC_KEY environment variable.")
+            raise Exception("Public key for license verification not set.")
+        verify_lic(license_b32, PUBLIC_KEY_B32, uid)
+        logger.info("License verification successful.")
+    except Exception as e:
+        logger.error(f"License verification failed: {e}")
+        print(f"License verification failed: {e}")
+        exit(1)
     
     def init_processor():
         """Initialize the FastANPR processor"""
@@ -1219,10 +1246,10 @@ if __name__ == "__main__":
         return processor
     
     # Limit CPU usage to 50% of available cores
-    #process = psutil.Process(os.getpid())
-    #total_cores = psutil.cpu_count(logical=True)
-    #cores_to_use = max(1, int((total_cores * 0.5) / 100))
-    #process.cpu_affinity(list(range(cores_to_use)))
+    # process = psutil.Process(os.getpid())
+    # total_cores = psutil.cpu_count(logical=True)
+    # cores_to_use = max(1, int((total_cores * 0.8) / 100))
+    # process.cpu_affinity(list(range(cores_to_use)))
 
     # Configuration from JSON
     PORT = config["server"]["port"]
