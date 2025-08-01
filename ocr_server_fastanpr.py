@@ -1210,8 +1210,10 @@ if __name__ == "__main__":
     # INSERT_YOUR_CODE
     # Load license key from file 'lic.key'
     LICENCE_FILE = "licence.key"
-    uid = get_machine_key()
+    
     try:
+        # get machine key
+        uid = get_machine_key()
         # Write uid to machine.key only if it does not exist
         if not os.path.exists("machine.key"):
             with open("machine.key", "w") as f:

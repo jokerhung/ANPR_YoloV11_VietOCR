@@ -5,3 +5,5 @@ open-image-models[onnx]
 fast-plate-ocr[onnx]
 flask
 requests
+pyinstaller
+cryptography

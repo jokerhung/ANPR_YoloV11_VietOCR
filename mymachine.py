@@ -12,31 +12,30 @@ def read_cpu_id() -> str:
     if not is_windows():
         raise Exception("This method only works on Windows")
 
+    # Method 1: Try wmic command
     try:
-        # Execute the wmic command to get the UUID
-        cmd = ["wmic", "csproduct", "get", "uuid"]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        
-        # Process the output
+        result = subprocess.run(['wmic', 'cpu', 'get', 'ProcessorId'], 
+                              capture_output=True, text=True, check=True, 
+                              creationflags=subprocess.CREATE_NO_WINDOW)
         lines = result.stdout.strip().split('\n')
-        uuid_value = ""
-        
-        for line in lines:
-            trimmed_line = line.strip()
-            if trimmed_line and trimmed_line.upper() != "UUID":
-                uuid_value = trimmed_line
-                break
-        
-        if not uuid_value:
-            raise Exception("UUID could not be retrieved")
-            
-        return uuid_value
-        
-    except subprocess.CalledProcessError as e:
-        raise Exception(f"Error executing command: {e}")
-    except Exception as e:
-        raise Exception(f"Error reading CPU ID: {e}")
+        if len(lines) > 1 and lines[1].strip():
+            return lines[1].strip()
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        pass
+    
+    # Method 2: Try PowerShell
+    try:
+        result = subprocess.run(['powershell', '-Command', 
+                               'Get-WmiObject -Class Win32_Processor | Select-Object -ExpandProperty ProcessorId'], 
+                              capture_output=True, text=True, check=True,
+                              creationflags=subprocess.CREATE_NO_WINDOW)
+        output = result.stdout.strip()
+        if output and output != 'ProcessorId':
+            return output
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        pass
 
+    return None
 
 def is_windows() -> bool:
     """Checks if the operating system is Windows"""
@@ -62,6 +61,10 @@ def get_machine_key() -> str:
     """Generates a unique machine key using CPU ID and machine name"""
     cpu_id = read_cpu_id()
     machine_name = read_computer_name()
+
+    # check if cpu_id or machine_name is None or UNKNOWN
+    if cpu_id is None or machine_name is None or machine_name == "UNKNOWN":
+        raise Exception("Unable to retrieve CPU ID or machine name for machine key generation.")
     
     # Create raw machine key for debugging
     raw_machine_key = f"{cpu_id}-{machine_name}"
