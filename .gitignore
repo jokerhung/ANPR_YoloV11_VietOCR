@@ -70,5 +70,11 @@ images/
 # tool
 tools/
 
-# output file
+# build file
+build/
 output*/
+dist/
+*.spec
+
+# test file
+test.py
