@@ -78,7 +78,11 @@ dist/
 *.spec
 
 # test file
-test.py
+test*.py
 
 # key file
 *.key
+
+# model file
+mymodel/
+images/
