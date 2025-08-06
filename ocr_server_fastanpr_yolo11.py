@@ -891,7 +891,7 @@ if __name__ == "__main__":
         """Initialize the FastANPR processor"""
         global processor
         if processor is None:
-            detection_model = config["models"]["detection_model"]
+            detection_model = config["models"]["yolo11_detection_model"]
             ocr_model = config["models"]["ocr_model"]
             logger.info(f"Initializing FastANPR processor with models: {detection_model}, {ocr_model}")
             processor = FastANPRProcessor(

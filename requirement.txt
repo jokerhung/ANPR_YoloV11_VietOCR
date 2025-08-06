@@ -1,6 +1,8 @@
 vietocr
 PaddleOCR
-ultralytics
+onnx
+onnxruntime
+ultralytics[onnx]
 open-image-models[onnx]
 fast-plate-ocr[onnx]
 fast-alpr[onnx]

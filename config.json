@@ -7,7 +7,7 @@
     "host": "0.0.0.0"
   },
   "models": {
-    "yolo11_detection_model": "mymodel\\yolo11\\license-plate-finetune-v1m.onnx",
+    "yolo11_detection_model": "mymodel\\yolo11\\license-plate-finetune-v1x.onnx",
     "detection_model": "yolo-v9-s-608-license-plate-end2end",
     "ocr_model": "cct-s-v1-global-model"
   }
